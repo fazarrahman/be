@@ -14,31 +14,34 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// Scopes: OAuth 2.0 scopes provide a way to limit the amount of access that is granted to an access token.
-var googleOauthConfig = &oauth2.Config{
-	RedirectURL:  "http://127.0.0.1:8080/auth/google/callback",
-	ClientID:     "754783545578-b5r3cecv0nvdd5nninbc1tt9cnqfgn89.apps.googleusercontent.com",
-	ClientSecret: "gwukmA1DmqpFeDRXKgmA2q--",
-	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
-	Endpoint:     google.Endpoint,
+type Auth struct {
+	googleOauthConfig oauth2.Config
+}
+
+func New(_oauth oauth2.Config) Auth {
+	var a Auth
+	a.googleOauthConfig = _oauth
+	a.googleOauthConfig.Scopes = []string{"https://www.googleapis.com/auth/userinfo.email"}
+	a.googleOauthConfig.Endpoint = google.Endpoint
+	return a
 }
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
-func OauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
+func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Create oauthState cookie
-	oauthState := generateStateOauthCookie(w)
+	oauthState := o.generateStateOauthCookie(w)
 
 	/*
 	   AuthCodeURL receive state that is a token to protect the user from CSRF attacks. You must always provide a non-empty string and
 	   validate that it matches the the state query parameter on your redirect callback.
 	*/
-	u := googleOauthConfig.AuthCodeURL(oauthState)
+	u := o.googleOauthConfig.AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
 
-func OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
+func (o Auth) OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Read oauthState from Cookie
 	oauthState, _ := r.Cookie("oauthstate")
 	if r.FormValue("state") != oauthState.Value {
@@ -46,7 +49,7 @@ func OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
-	data, err := getUserDataFromGoogle(r.FormValue("code"))
+	data, err := o.getUserDataFromGoogle(r.FormValue("code"))
 	if err != nil {
 		log.Println(err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -58,7 +61,7 @@ func OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "UserInfo: %s\n", data)
 }
 
-func generateStateOauthCookie(w http.ResponseWriter) string {
+func (o Auth) generateStateOauthCookie(w http.ResponseWriter) string {
 	var expiration = time.Now().Add(365 * 24 * time.Hour)
 
 	b := make([]byte, 16)
@@ -69,10 +72,10 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 	return state
 }
 
-func getUserDataFromGoogle(code string) ([]byte, error) {
+func (o Auth) getUserDataFromGoogle(code string) ([]byte, error) {
 	// Use code to get token and get user info from Google.
 
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
+	token, err := o.googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}

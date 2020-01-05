@@ -1,21 +1,22 @@
 package rest
 
 import (
-	"errors"
-	"net/http"
 	"be/auth"
 	"be/service"
+	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 type Rest struct {
-	svc service.Service
+	svc  service.Service
+	auth auth.Auth
 }
 
-func New(_svc service.Service) *Rest {
-	return &Rest{svc: _svc}
+func New(_svc service.Service, _a auth.Auth) *Rest {
+	return &Rest{svc: _svc, auth: _a}
 }
 
 func (r *Rest) Register(re *gin.Engine) {
@@ -33,12 +34,12 @@ func (r *Rest) HandlePing(c *gin.Context) {
 }
 
 func (r *Rest) GoogleLogin(c *gin.Context) {
-	auth.OauthGoogleLogin(c.Writer, c.Request)
+	r.auth.OauthGoogleLogin(c.Writer, c.Request)
 	return
 }
 
 func (r *Rest) GoogleCallback(c *gin.Context) {
-	auth.OauthGoogleCallback(c.Writer, c.Request)
+	r.auth.OauthGoogleCallback(c.Writer, c.Request)
 	return
 }
 
