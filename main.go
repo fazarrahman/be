@@ -31,7 +31,7 @@ func main() {
 	}
 
 	googleAuth := auth.New(oauth2.Config{
-		RedirectURL:  "http://" + getEnv("BASE_URL", "") + port + "/auth/google/callback",
+		RedirectURL:  getEnv("HTTP_PROTOCOL", "") + "//" + getEnv("BASE_URL", "") + port + "/auth/google/callback",
 		ClientID:     getEnv("GOOGLE_OAUTH_CLIENT_ID", ""),
 		ClientSecret: getEnv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
 	})
