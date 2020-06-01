@@ -34,7 +34,8 @@ func (r *Rest) HandlePing(c *gin.Context) {
 }
 
 func (r *Rest) GoogleLogin(c *gin.Context) {
-	r.auth.OauthGoogleLogin(c.Writer, c.Request)
+	url := r.auth.OauthGoogleLogin(c.Writer, c.Request)
+	c.JSON(http.StatusOK, url)
 	return
 }
 

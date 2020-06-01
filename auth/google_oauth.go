@@ -28,7 +28,7 @@ func New(_oauth oauth2.Config) Auth {
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
-func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
+func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) string {
 
 	// Create oauthState cookie
 	oauthState := o.generateStateOauthCookie(w)
@@ -37,18 +37,20 @@ func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	   AuthCodeURL receive state that is a token to protect the user from CSRF attacks. You must always provide a non-empty string and
 	   validate that it matches the the state query parameter on your redirect callback.
 	*/
-	u := o.googleOauthConfig.AuthCodeURL(oauthState)
-	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
+	return o.googleOauthConfig.AuthCodeURL(oauthState)
+
 }
 
 func (o Auth) OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
-	// Read oauthState from Cookie
-	oauthState, _ := r.Cookie("oauthstate")
-	if r.FormValue("state") != oauthState.Value {
-		log.Println("invalid oauth google state")
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
+	/*
+		// Read oauthState from Cookie
+		oauthState, _ := r.Cookie("oauthstate")
+		if r.FormValue("state") != oauthState.Value {
+			log.Println("invalid oauth google state")
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}*/
+
 	data, err := o.getUserDataFromGoogle(r.FormValue("code"))
 	if err != nil {
 		log.Println(err.Error())
