@@ -1,21 +1,22 @@
 package auth
 
 import (
-	"context"
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
-	"io/ioutil"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 type Auth struct {
 	googleOauthConfig oauth2.Config
+	httpClient        *http.Client
 }
 
 func New(_oauth oauth2.Config) Auth {
@@ -23,10 +24,13 @@ func New(_oauth oauth2.Config) Auth {
 	a.googleOauthConfig = _oauth
 	a.googleOauthConfig.Scopes = []string{"https://www.googleapis.com/auth/userinfo.email"}
 	a.googleOauthConfig.Endpoint = google.Endpoint
+	a.httpClient = &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	return a
 }
 
-const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
+const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v3/userinfo?access_token="
 
 func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) string {
 
@@ -41,26 +45,24 @@ func (o Auth) OauthGoogleLogin(w http.ResponseWriter, r *http.Request) string {
 
 }
 
-func (o Auth) OauthGoogleCallback(w http.ResponseWriter, r *http.Request) {
-	/*
-		// Read oauthState from Cookie
-		oauthState, _ := r.Cookie("oauthstate")
-		if r.FormValue("state") != oauthState.Value {
-			log.Println("invalid oauth google state")
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
-		}*/
+func (o Auth) OauthGoogleCallback(w http.ResponseWriter, r *http.Request) (string, error) {
 
-	data, err := o.getUserDataFromGoogle(r.FormValue("code"))
+	// Read oauthState from Cookie
+	/*oauthState, err := r.Cookie("oauthstate")
+	if r.FormValue("state") != oauthState.Value {
+		log.Println("invalid oauth google state")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return err
+	}*/
+
+	token, err := o.getGoogleToken(r.FormValue("code"))
 	if err != nil {
 		log.Println(err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
+		return "", err
 	}
-	// GetOrCreate User in your db.
-	// Redirect or response with a token.
-	// More code .....
-	fmt.Fprintf(w, "UserInfo: %s\n", data)
+
+	return token, err
 }
 
 func (o Auth) generateStateOauthCookie(w http.ResponseWriter) string {
@@ -74,23 +76,41 @@ func (o Auth) generateStateOauthCookie(w http.ResponseWriter) string {
 	return state
 }
 
-func (o Auth) getUserDataFromGoogle(code string) ([]byte, error) {
-	// Use code to get token and get user info from Google.
+func (o Auth) getGoogleToken(code string) (string, error) {
+	// Use code to get token from Google.
+	var buffer bytes.Buffer
+	err := json.NewEncoder(&buffer).Encode(&map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"client_id":     o.googleOauthConfig.ClientID,
+		"client_secret": o.googleOauthConfig.ClientSecret,
+		"redirect_uri":  o.googleOauthConfig.RedirectURL,
+	})
+	if err != nil {
+		return "", err
+	}
 
-	token, err := o.googleOauthConfig.Exchange(context.Background(), code)
+	req, err := http.NewRequest(http.MethodPost, `https://www.googleapis.com/oauth2/v4/token`, &buffer)
 	if err != nil {
-		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
+		return "", err
 	}
-	response, err := http.Get(oauthGoogleUrlAPI + token.AccessToken)
+
+	resp, err := o.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed getting user info: %s", err.Error())
+		return "", err
 	}
-	defer response.Body.Close()
-	contents, err := ioutil.ReadAll(response.Body)
+	defer resp.Body.Close()
+
+	var data struct {
+		Token string `json:"id_token"`
+	}
+
+	err = jsoniter.ConfigFastest.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
-		return nil, fmt.Errorf("failed read response: %s", err.Error())
+		return "", err
 	}
-	return contents, nil
+
+	return data.Token, nil
 }
 
 type UserInfo struct {

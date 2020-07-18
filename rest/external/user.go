@@ -3,8 +3,10 @@ package rest
 import (
 	"be/auth"
 	"be/service"
+	"crypto/rand"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -40,7 +42,19 @@ func (r *Rest) GoogleLogin(c *gin.Context) {
 }
 
 func (r *Rest) GoogleCallback(c *gin.Context) {
-	r.auth.OauthGoogleCallback(c.Writer, c.Request)
+	token, err := r.auth.OauthGoogleCallback(c.Writer, c.Request)
+	if err != nil {
+		c.Error(err)
+	}
+
+	// set access token to cookie
+	var expiration = time.Now().Add(365 * 24 * time.Hour)
+	b := make([]byte, 16)
+	rand.Read(b)
+	cookie := http.Cookie{Name: "at", Value: token, Expires: expiration}
+	http.SetCookie(c.Writer, &cookie)
+
+	c.JSON(http.StatusOK, "OK")
 	return
 }
 
